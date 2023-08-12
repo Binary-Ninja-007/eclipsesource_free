@@ -1,0 +1,38 @@
+/bin/
+/target/
+/obj/
+/build/
+/node.out/
+/.vscode/
+/.metadata/
+
+.gradle
+.DS_Store
+*.patch
+*.so
+*.dll
+*.dylib
+hs_err*.log
+*.tar.gz
+
+# Intellij project files
+*.iml
+*.ipr
+*.iws
+.idea
+
+# Python binaries
+*.pyc
+
+# build input/output
+node
+build.out
+cmake.out
+node.out
+v8.out
+
+# test input/output
+test-mockup-os-release
+
+# generated dependency packages
+*.tar.*

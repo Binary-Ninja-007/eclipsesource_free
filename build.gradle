@@ -1,0 +1,137 @@
+apply plugin: 'maven'
+apply plugin: 'signing'
+
+group = 'com.eclipsesource.j2v8'
+archivesBaseName = 'j2v8'
+version = System.getenv('J2V8_FULL_VERSION')
+
+ext."signing.secretKeyRingFile" = '/.gnupg/secring.gpg'
+ext."signing.password" = System.getenv("KEYSTORE_PASSWORD")
+ext."signing.keyId" = System.getenv("KEY_ID")
+
+configurations {
+    archives {
+        extendsFrom configurations.default
+    }
+}
+
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:2.2.2'
+        classpath 'com.stanfy.spoon:spoon-gradle-plugin:1.2.2'
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'spoon'
+
+repositories {
+    jcenter()
+}
+
+dependencies {
+    testCompile 'junit:junit:4.12'
+    //testCompile 'org.mockito:mockito-all:2.6.3'
+    testCompile 'org.mockito:mockito-core:2.6.3'
+
+    androidTestCompile 'junit:junit:4.12'
+    androidTestCompile 'org.mockito:mockito-android:2.6.3' // https://jeroenmols.com/blog/2017/01/17/mockitoandroid/
+    androidTestCompile 'com.android.support:support-annotations:24.0.0'
+    androidTestCompile 'com.android.support.test:runner:0.5'
+    androidTestCompile 'com.android.support.test:rules:0.5'
+}
+
+android {
+    compileSdkVersion 10
+    buildToolsVersion '24.0.3'
+
+    defaultConfig {
+        minSdkVersion 10
+        targetSdkVersion 10
+
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+
+    sourceSets {
+        androidTest {
+            java.srcDirs = ['src/test']
+        }
+
+        // androidTest.setRoot('src/test')
+    }
+
+}
+
+// see: https://github.com/square/spoon
+spoon {
+    // for debug output
+    debug = true
+
+    // To run only specified test classes
+    if (project.hasProperty('testClass')) {
+        className = project.testClass
+    }
+
+    // To run a single method in TestCase
+    if (project.hasProperty('testMethod')) {
+        methodName = project.testMethod
+    }
+}
+
+signing {
+    // required { has("release") && gradle.taskGraph.hasTask("uploadArchives") }
+    sign configurations.archives
+}
+
+uploadArchives {
+  repositories {
+    mavenDeployer {
+      beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+      repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+        authentication(userName: System.getenv("MAVEN_REPO_USER"), password: System.getenv("MAVEN_REPO_PASS") )
+      }
+
+      snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+        authentication(userName: System.getenv("MAVEN_REPO_USER"), password: System.getenv("MAVEN_REPO_PASS") )
+      }
+
+      pom.project {
+	    name 'j2v8'
+	    packaging 'aar'
+	    description 'J2V8 is a set of Java bindings for V8'
+	    url 'https://github.com/eclipsesource/j2v8'
+
+	    scm {
+		url 'scm:git:git@github.com:eclipsesource/J2V8.git'
+		connection 'scm:git:git@github.com:eclipsesource/J2V8.git'
+		developerConnection 'scm:git:git@github.com:eclipsesource/J2V8.git'
+	    }
+
+	    licenses {
+		license {
+		    name 'Eclipse Public License - v 1.0'
+		    url 'https://www.eclipse.org/legal/epl-v10.html'
+		    distribution 'repo'
+		}
+	    }
+
+	    developers {
+		developer {
+		    id 'irbull'
+		    name 'R. Ian Bull'
+		    email 'irbull@eclipsesource.com'
+		}
+	    }
+
+        }
+      }
+    }
+  }

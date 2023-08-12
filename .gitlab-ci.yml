@@ -1,0 +1,85 @@
+# The build image for all regulator projects is available at
+# https://regulator.innoopract.com/build-tools/regulator-build-image
+# Whenever changes are submitted to the master branch, the image is
+# automatically built and uploaded to the projects container registry.
+image: docker:18.06.1-ce-dind
+
+variables:
+  DOCKER_HOST: tcp://localhost:2375/
+  ANDROID_COMPILE_SDK: "28"
+  ANDROID_BUILD_TOOLS: "28.0.2"
+  ANDROID_SDK_TOOLS:   "4333796"
+
+before_script:
+  - apk add --no-cache nss
+  - apk add --update python git gzip tar openjdk8 bash wget unzip libstdc++ 
+  - apk add gnupg
+  - wget --quiet --output-document=android-sdk.zip https://dl.google.com/android/repository/sdk-tools-linux-${ANDROID_SDK_TOOLS}.zip
+  - unzip -d android-sdk-linux android-sdk.zip
+  - echo y | android-sdk-linux/tools/bin/sdkmanager "platforms;android-${ANDROID_COMPILE_SDK}" >/dev/null
+  - echo y | android-sdk-linux/tools/bin/sdkmanager "platform-tools" >/dev/null
+  - echo y | android-sdk-linux/tools/bin/sdkmanager "build-tools;${ANDROID_BUILD_TOOLS}" >/dev/null
+  - export ANDROID_HOME=$PWD/android-sdk-linux
+  - export PATH=$PATH:$PWD/android-sdk-linux/platform-tools/
+  - chmod +x ./gradlew
+  # temporarily disable checking for EPIPE error and use yes to accept all licenses
+  - set +o pipefail
+  - yes | android-sdk-linux/tools/bin/sdkmanager --licenses
+  - set -o pipefail
+
+stages:
+  - build
+
+services:
+  - name: docker:dind
+    entrypoint:
+      - dockerd-entrypoint.sh
+
+maven_verify:
+  stage: build
+  script:
+    - docker info
+    - COMMIT_HASH=`git rev-parse HEAD` && sed -i "s/Unknown\ revision\ ID/$COMMIT_HASH/g" src/main/java/com/eclipsesource/v8/V8.java
+    - python nodejs.py git clone
+    - python nodejs.py diff apply
+    - python build.py -t android -a arm --docker all > arm.txt 2>&1 && cat arm.txt && ! grep -q BUILD\ FAILED arm.txt && echo passed || exit 1
+    - python build.py -t android -a x86 --keep-native-libs  --docker nodejs j2v8cmake j2v8jni j2v8cpp j2v8optimize j2v8java > x86.txt 2>&1 && cat x86.txt && ! grep -q BUILD\ FAILED x86.txt && echo passed || exit 1
+    - python build.py -t android -a x86_64 --keep-native-libs  --docker nodejs j2v8cmake j2v8jni j2v8cpp j2v8optimize j2v8java > x86_64.txt 2>&1 && cat x86_64.txt && ! grep -q BUILD\ FAILED x86_64.txt && echo passed || exit 1
+    - python build.py -t android -a arm64 --keep-native-libs  --docker nodejs j2v8cmake j2v8jni j2v8cpp j2v8optimize j2v8java > arm64.txt 2>&1 && cat arm64.txt && ! grep -q BUILD\ FAILED arm64.txt && echo passed || exit 1
+  artifacts:
+    when: always
+    paths:
+      - build/outputs/aar/**
+      - arm.txt
+      - x86.txt
+      - x86_64.txt
+      - arm64.txt
+      - src/main/jniLibs/**/*
+      - node/node.build.output
+  except:
+    - master
+
+maven_verify_deploy:
+  stage: build
+  script:
+    - docker info
+    - COMMIT_HASH=`git rev-parse HEAD` && sed -i "s/Unknown\ revision\ ID/$COMMIT_HASH/g" src/main/java/com/eclipsesource/v8/V8.java
+    - python nodejs.py git clone
+    - python nodejs.py diff apply
+    - python build.py -t android -a arm --docker all > arm.txt 2>&1 && cat arm.txt && ! grep -q BUILD\ FAILED arm.txt && echo passed || exit 1
+    - python build.py -t android -a x86 --keep-native-libs  --docker nodejs j2v8cmake j2v8jni j2v8cpp j2v8optimize j2v8java > x86.txt 2>&1 && cat x86.txt && ! grep -q BUILD\ FAILED x86.txt && echo passed || exit 1
+    - python build.py -t android -a x86_64 --keep-native-libs  --docker nodejs j2v8cmake j2v8jni j2v8cpp j2v8optimize j2v8java > x86_64.txt 2>&1 && cat x86_64.txt && ! grep -q BUILD\ FAILED x86_64.txt && echo passed || exit 1
+    - python build.py -t android -a arm64 --keep-native-libs  --docker nodejs j2v8cmake j2v8jni j2v8cpp j2v8optimize j2v8java > arm64.txt 2>&1 && cat arm64.txt && ! grep -q BUILD\ FAILED arm64.txt && echo passed || exit 1
+    - python build.py -t android -a arm j2v8release --keep-native-libs --docker
+  artifacts:
+    when: always
+    paths:
+      - build/outputs/aar/**
+      - arm.txt
+      - x86.txt
+      - x86_64.txt
+      - arm64.txt
+      - src/main/jniLibs/**/*
+      - node/node.build.output
+  only:
+    - master
